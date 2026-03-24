@@ -62,7 +62,7 @@ Content pinned through the cluster is automatically replicated to at least 2 nod
 
 ```bash
 # Navigate to the module directory
-cd /Users/lmatas/source/dark/dark-ipfs
+cd /Users/lmatas/source/dark-developer/components/blockchain/dark-ipfs
 
 # Create environment file from template
 cp .env.example .env
