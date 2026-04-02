@@ -14,7 +14,7 @@ services:
       - ipfs0-export:/export
     ports:
       - "${IPFS0_API_PORT:-5001}:5001"
-      - "${IPFS0_GATEWAY_PORT:-8080}:8080"
+      - "${IPFS0_GATEWAY_BIND:-127.0.0.1}:${IPFS0_GATEWAY_PORT:-38080}:8080"
       - "${IPFS0_SWARM_PORT:-4001}:4001"
     healthcheck:
       test: ["CMD-SHELL", "ipfs id >/dev/null 2>&1"]
