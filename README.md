@@ -26,7 +26,7 @@ This module spins up a self-contained IPFS Cluster suitable for local developmen
          ▼
     Host Endpoints:
     - IPFS API:     localhost:5001
-    - IPFS Gateway: localhost:8080
+    - IPFS Gateway: localhost:38080
     - Cluster API:  localhost:9094
     - Cluster Proxy:localhost:9095
 ```
@@ -62,7 +62,7 @@ Content pinned through the cluster is automatically replicated to at least 2 nod
 
 ```bash
 # Navigate to the module directory
-cd /Users/lmatas/source/dark/dark-ipfs
+cd /Users/lmatas/source/dark-developer/components/blockchain/dark-ipfs
 
 # Create environment file from template
 cp .env.example .env
@@ -88,7 +88,8 @@ Edit `.env` to customize the cluster:
 | `CLUSTER_REPLICATION_MIN` | `2` | Minimum replication factor |
 | `CLUSTER_REPLICATION_MAX` | `3` | Maximum replication factor |
 | `IPFS0_API_PORT` | `5001` | Host port for IPFS API |
-| `IPFS0_GATEWAY_PORT` | `8080` | Host port for IPFS Gateway |
+| `IPFS0_GATEWAY_BIND` | `127.0.0.1` | Host interface for the IPFS Gateway |
+| `IPFS0_GATEWAY_PORT` | `38080` | Host port for IPFS Gateway |
 | `IPFS0_SWARM_PORT` | `4001` | Host port for IPFS Swarm (P2P) |
 | `CLUSTER_API_PORT` | `9094` | Host port for Cluster REST API |
 | `CLUSTER_PROXY_PORT` | `9095` | Host port for Cluster IPFS Proxy |
@@ -123,7 +124,7 @@ Only `ipfs0` and `cluster0` expose ports to the host:
 | Endpoint | URL | Description |
 |----------|-----|-------------|
 | IPFS API | `http://localhost:5001` | IPFS HTTP API for adding/getting content |
-| IPFS Gateway | `http://localhost:8080` | HTTP gateway for fetching content by CID |
+| IPFS Gateway | `http://localhost:38080` | HTTP gateway for fetching content by CID |
 | Cluster REST API | `http://localhost:9094` | IPFS Cluster management API |
 | Cluster IPFS Proxy | `http://localhost:9095` | IPFS API proxy with automatic pinning |
 
@@ -137,7 +138,7 @@ echo "Hello dARK" | curl -X POST -F "file=@-" "http://localhost:5001/api/v0/add?
 curl -X POST "http://localhost:9094/pins/bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi"
 
 # Get content via Gateway
-curl "http://localhost:8080/ipfs/bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi"
+curl "http://localhost:38080/ipfs/bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi"
 
 # Check cluster peers
 curl "http://localhost:9094/peers" | jq
