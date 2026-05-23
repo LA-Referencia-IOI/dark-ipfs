@@ -2,7 +2,7 @@ name: dark-ipfs
 
 services:
   ipfs0:
-    image: ipfs/kubo:${KUBO_IMAGE_TAG:-latest}
+    image: ipfs/kubo:${KUBO_IMAGE_TAG:-v0.41.0}
     container_name: dark-ipfs-ipfs0
     restart: unless-stopped
     entrypoint: ["/usr/local/bin/ipfs-entrypoint.sh"]
@@ -23,10 +23,11 @@ services:
       retries: 15
       start_period: 20s
     networks:
-      - dark-ipfs
+      - store-node
+      - ipfs-backbone
 
   ipfs1:
-    image: ipfs/kubo:${KUBO_IMAGE_TAG:-latest}
+    image: ipfs/kubo:${KUBO_IMAGE_TAG:-v0.41.0}
     container_name: dark-ipfs-ipfs1
     restart: unless-stopped
     entrypoint: ["/usr/local/bin/ipfs-entrypoint.sh"]
@@ -47,10 +48,11 @@ services:
       retries: 15
       start_period: 20s
     networks:
-      - dark-ipfs
+      - remote-node-1
+      - ipfs-backbone
 
   ipfs2:
-    image: ipfs/kubo:${KUBO_IMAGE_TAG:-latest}
+    image: ipfs/kubo:${KUBO_IMAGE_TAG:-v0.41.0}
     container_name: dark-ipfs-ipfs2
     restart: unless-stopped
     entrypoint: ["/usr/local/bin/ipfs-entrypoint.sh"]
@@ -71,10 +73,11 @@ services:
       retries: 15
       start_period: 20s
     networks:
-      - dark-ipfs
+      - remote-node-2
+      - ipfs-backbone
 
   cluster0:
-    image: ipfs/ipfs-cluster:${IPFS_CLUSTER_IMAGE_TAG:-latest}
+    image: ipfs/ipfs-cluster:${IPFS_CLUSTER_IMAGE_TAG:-v1.1.6}
     container_name: dark-ipfs-cluster0
     restart: unless-stopped
     entrypoint: ["/usr/local/bin/cluster-entrypoint.sh"]
@@ -87,9 +90,11 @@ services:
       CLUSTER_CONSENSUS: crdt
       CLUSTER_CRDT_TRUSTEDPEERS: "*"
       CLUSTER_REPLICATIONFACTORMIN: ${CLUSTER_REPLICATION_MIN:-2}
-      CLUSTER_REPLICATIONFACTORMAX: ${CLUSTER_REPLICATION_MAX:-3}
+      CLUSTER_REPLICATIONFACTORMAX: ${CLUSTER_REPLICATION_MAX:-2}
       CLUSTER_IPFSHTTP_NODEMULTIADDRESS: /dns4/ipfs0/tcp/5001
+      CLUSTER_IPFSPROXY_NODEMULTIADDRESS: /dns4/ipfs0/tcp/5001
       CLUSTER_RESTAPI_HTTPLISTENMULTIADDRESS: /ip4/0.0.0.0/tcp/9094
+      CLUSTER_IPFSPROXY_LISTENMULTIADDRESS: /ip4/0.0.0.0/tcp/9095
       CLUSTER_PROXYAPI_LISTENMULTIADDRESS: /ip4/0.0.0.0/tcp/9095
       CLUSTER_MONITORPINGINTERVAL: 2s
     volumes:
@@ -105,10 +110,11 @@ services:
       retries: 15
       start_period: 20s
     networks:
-      - dark-ipfs
+      - store-node
+      - ipfs-backbone
 
   cluster1:
-    image: ipfs/ipfs-cluster:${IPFS_CLUSTER_IMAGE_TAG:-latest}
+    image: ipfs/ipfs-cluster:${IPFS_CLUSTER_IMAGE_TAG:-v1.1.6}
     container_name: dark-ipfs-cluster1
     restart: unless-stopped
     entrypoint: ["/usr/local/bin/cluster-entrypoint.sh"]
@@ -123,7 +129,7 @@ services:
       CLUSTER_CONSENSUS: crdt
       CLUSTER_CRDT_TRUSTEDPEERS: "*"
       CLUSTER_REPLICATIONFACTORMIN: ${CLUSTER_REPLICATION_MIN:-2}
-      CLUSTER_REPLICATIONFACTORMAX: ${CLUSTER_REPLICATION_MAX:-3}
+      CLUSTER_REPLICATIONFACTORMAX: ${CLUSTER_REPLICATION_MAX:-2}
       CLUSTER_IPFSHTTP_NODEMULTIADDRESS: /dns4/ipfs1/tcp/5001
       CLUSTER_RESTAPI_HTTPLISTENMULTIADDRESS: /ip4/0.0.0.0/tcp/9094
       BOOTSTRAP_PEER_HOST: cluster0
@@ -137,10 +143,11 @@ services:
       retries: 15
       start_period: 20s
     networks:
-      - dark-ipfs
+      - remote-node-1
+      - ipfs-backbone
 
   cluster2:
-    image: ipfs/ipfs-cluster:${IPFS_CLUSTER_IMAGE_TAG:-latest}
+    image: ipfs/ipfs-cluster:${IPFS_CLUSTER_IMAGE_TAG:-v1.1.6}
     container_name: dark-ipfs-cluster2
     restart: unless-stopped
     entrypoint: ["/usr/local/bin/cluster-entrypoint.sh"]
@@ -155,7 +162,7 @@ services:
       CLUSTER_CONSENSUS: crdt
       CLUSTER_CRDT_TRUSTEDPEERS: "*"
       CLUSTER_REPLICATIONFACTORMIN: ${CLUSTER_REPLICATION_MIN:-2}
-      CLUSTER_REPLICATIONFACTORMAX: ${CLUSTER_REPLICATION_MAX:-3}
+      CLUSTER_REPLICATIONFACTORMAX: ${CLUSTER_REPLICATION_MAX:-2}
       CLUSTER_IPFSHTTP_NODEMULTIADDRESS: /dns4/ipfs2/tcp/5001
       CLUSTER_RESTAPI_HTTPLISTENMULTIADDRESS: /ip4/0.0.0.0/tcp/9094
       BOOTSTRAP_PEER_HOST: cluster0
@@ -169,11 +176,21 @@ services:
       retries: 15
       start_period: 20s
     networks:
-      - dark-ipfs
+      - remote-node-2
+      - ipfs-backbone
 
 networks:
-  dark-ipfs:
-    name: dark-ipfs-network
+  store-node:
+    name: dark-ipfs-store-node
+    driver: bridge
+  ipfs-backbone:
+    name: dark-ipfs-backbone
+    driver: bridge
+  remote-node-1:
+    name: dark-ipfs-remote-node-1
+    driver: bridge
+  remote-node-2:
+    name: dark-ipfs-remote-node-2
     driver: bridge
 
 volumes:

@@ -14,6 +14,27 @@ if [ ! -f "${CLUSTER_PATH}/service.json" ]; then
   ipfs-cluster-service init >/dev/null
 fi
 
+configure_service_json() {
+  service_json="${CLUSTER_PATH}/service.json"
+  [ -f "${service_json}" ] || return 0
+
+  proxy_listen="${CLUSTER_IPFSPROXY_LISTENMULTIADDRESS:-${CLUSTER_PROXYAPI_LISTENMULTIADDRESS:-}}"
+  if [ -n "${proxy_listen}" ]; then
+    # ipfs-cluster-service keeps this value in service.json after init; set it
+    # explicitly so the proxy is reachable from sibling containers.
+    sed -i "s#\"listen_multiaddress\": \"/ip4/127.0.0.1/tcp/9095\"#\"listen_multiaddress\": \"${proxy_listen}\"#" "${service_json}"
+  fi
+
+  proxy_node="${CLUSTER_IPFSPROXY_NODEMULTIADDRESS:-${CLUSTER_IPFSHTTP_NODEMULTIADDRESS:-}}"
+  if [ -n "${proxy_node}" ]; then
+    # The proxy has its own backend node_multiaddress and older initialized
+    # volumes keep the localhost default, which is unreachable in this layout.
+    sed -i "s#\"node_multiaddress\": \"/ip4/127.0.0.1/tcp/5001\"#\"node_multiaddress\": \"${proxy_node}\"#" "${service_json}"
+  fi
+}
+
+configure_service_json
+
 resolve_bootstrap_id() {
   target_host="$1"
   output="$(ipfs-cluster-ctl --host "/dns4/${target_host}/tcp/9094" id --enc json 2>/dev/null || true)"

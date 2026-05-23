@@ -10,7 +10,7 @@ This module spins up a self-contained IPFS Cluster suitable for local developmen
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                        dark-ipfs-network                        │
+│                         dark-ipfs-backbone                      │
 │                                                                 │
 │  ┌──────────┐      ┌──────────┐      ┌──────────┐              │
 │  │  ipfs0   │◄────►│  ipfs1   │◄────►│  ipfs2   │   Kubo Nodes │
@@ -22,6 +22,10 @@ This module spins up a self-contained IPFS Cluster suitable for local developmen
 │  │(primary) │      │          │      │          │  Peers       │
 │  └──────────┘      └──────────┘      └──────────┘              │
 └─────────────────────────────────────────────────────────────────┘
+         │
+         ├── dark-ipfs-store-node: ipfs0 + cluster0 + Store API
+         ├── dark-ipfs-remote-node-1: ipfs1 + cluster1
+         └── dark-ipfs-remote-node-2: ipfs2 + cluster2
          │
          ▼
     Host Endpoints:
@@ -38,6 +42,12 @@ This module spins up a self-contained IPFS Cluster suitable for local developmen
 | `ipfs0`, `ipfs1`, `ipfs2` | [Kubo](https://github.com/ipfs/kubo) IPFS nodes forming the underlying storage layer |
 | `cluster0`, `cluster1`, `cluster2` | [IPFS Cluster](https://ipfscluster.io/) peers managing automated pinning orchestration |
 
+The network layout intentionally separates the Store API view from the full cluster:
+
+- `dark-ipfs-store-node` contains only `ipfs0` and `cluster0`. `dark-store-api` joins this network and uses `http://ipfs0:5001`, `http://cluster0:9094`, and `http://cluster0:9095`.
+- `dark-ipfs-backbone` connects all IPFS and Cluster peers so Cluster can replicate content.
+- `dark-ipfs-remote-node-1` and `dark-ipfs-remote-node-2` simulate remote storage nodes from the Store API point of view.
+
 **Startup Order:**
 1. `ipfs0` starts first and becomes the bootstrap node
 2. `ipfs1` and `ipfs2` start after `ipfs0` is healthy and connect to it
@@ -49,7 +59,7 @@ This module spins up a self-contained IPFS Cluster suitable for local developmen
 | Setting | Default | Description |
 |---------|---------|-------------|
 | `CLUSTER_REPLICATION_MIN` | 2 | Minimum number of nodes that must pin content |
-| `CLUSTER_REPLICATION_MAX` | 3 | Maximum number of nodes to replicate to |
+| `CLUSTER_REPLICATION_MAX` | 2 | Maximum number of nodes to replicate to |
 
 Content pinned through the cluster is automatically replicated to at least 2 nodes, ensuring fault tolerance.
 
@@ -62,7 +72,7 @@ Content pinned through the cluster is automatically replicated to at least 2 nod
 
 ```bash
 # Navigate to the module directory
-cd /Users/lmatas/source/dark-developer/components/blockchain/dark-ipfs
+cd /Users/lmatas/source/dark-deployer/components/blockchain/dark-ipfs
 
 # Create environment file from template
 cp .env.example .env
@@ -82,11 +92,11 @@ Edit `.env` to customize the cluster:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `KUBO_IMAGE_TAG` | `latest` | Kubo Docker image tag |
-| `IPFS_CLUSTER_IMAGE_TAG` | `latest` | IPFS Cluster Docker image tag |
+| `KUBO_IMAGE_TAG` | `v0.41.0` | Kubo Docker image tag |
+| `IPFS_CLUSTER_IMAGE_TAG` | `v1.1.6` | IPFS Cluster Docker image tag |
 | `CLUSTER_SECRET` | (generated) | 32-byte hex secret for cluster authentication |
 | `CLUSTER_REPLICATION_MIN` | `2` | Minimum replication factor |
-| `CLUSTER_REPLICATION_MAX` | `3` | Maximum replication factor |
+| `CLUSTER_REPLICATION_MAX` | `2` | Maximum replication factor |
 | `IPFS0_API_PORT` | `5001` | Host port for IPFS API |
 | `IPFS0_GATEWAY_BIND` | `127.0.0.1` | Host interface for the IPFS Gateway |
 | `IPFS0_GATEWAY_PORT` | `38080` | Host port for IPFS Gateway |
