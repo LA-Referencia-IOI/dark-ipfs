@@ -23,8 +23,10 @@ services:
       retries: 15
       start_period: 20s
     networks:
-      - store-node
-      - ipfs-backbone
+      dark-net:
+        aliases:
+          - ipfs0
+      ipfs-backbone:
 
   ipfs1:
     image: ipfs/kubo:${KUBO_IMAGE_TAG:-v0.41.0}
@@ -110,8 +112,10 @@ services:
       retries: 15
       start_period: 20s
     networks:
-      - store-node
-      - ipfs-backbone
+      dark-net:
+        aliases:
+          - cluster0
+      ipfs-backbone:
 
   cluster1:
     image: ipfs/ipfs-cluster:${IPFS_CLUSTER_IMAGE_TAG:-v1.1.6}
@@ -180,9 +184,9 @@ services:
       - ipfs-backbone
 
 networks:
-  store-node:
-    name: dark-ipfs-store-node
-    driver: bridge
+  dark-net:
+    external: true
+    name: dark-net
   ipfs-backbone:
     name: dark-ipfs-backbone
     driver: bridge

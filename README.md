@@ -23,7 +23,7 @@ This module spins up a self-contained IPFS Cluster suitable for local developmen
 │  └──────────┘      └──────────┘      └──────────┘              │
 └─────────────────────────────────────────────────────────────────┘
          │
-         ├── dark-ipfs-store-node: ipfs0 + cluster0 + Store API
+         ├── dark-net: ipfs0 + cluster0 + Store API + dARK services
          ├── dark-ipfs-remote-node-1: ipfs1 + cluster1
          └── dark-ipfs-remote-node-2: ipfs2 + cluster2
          │
@@ -42,9 +42,9 @@ This module spins up a self-contained IPFS Cluster suitable for local developmen
 | `ipfs0`, `ipfs1`, `ipfs2` | [Kubo](https://github.com/ipfs/kubo) IPFS nodes forming the underlying storage layer |
 | `cluster0`, `cluster1`, `cluster2` | [IPFS Cluster](https://ipfscluster.io/) peers managing automated pinning orchestration |
 
-The network layout intentionally separates the Store API view from the full cluster:
+The network layout intentionally keeps the Store API view simple while still simulating remote storage nodes:
 
-- `dark-ipfs-store-node` contains only `ipfs0` and `cluster0`. `dark-store-api` joins this network and uses `http://ipfs0:5001`, `http://cluster0:9094`, and `http://cluster0:9095`.
+- `dark-net` is the shared dARK integration network. `ipfs0` and `cluster0` join it with stable aliases so `dark-store-api` can use `http://ipfs0:5001`, `http://cluster0:9094`, and `http://cluster0:9095`.
 - `dark-ipfs-backbone` connects all IPFS and Cluster peers so Cluster can replicate content.
 - `dark-ipfs-remote-node-1` and `dark-ipfs-remote-node-2` simulate remote storage nodes from the Store API point of view.
 
@@ -71,8 +71,12 @@ Content pinned through the cluster is automatically replicated to at least 2 nod
 ## Quick Start
 
 ```bash
-# Navigate to the module directory
-cd /Users/lmatas/source/dark-deployer/components/blockchain/dark-ipfs
+# From the repository root, make sure dark-net exists first.
+# The normal installer does this by starting dark-env.
+cd components/blockchain/dark-env
+docker compose up -d
+
+cd ../dark-ipfs
 
 # Create environment file from template
 cp .env.example .env

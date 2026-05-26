@@ -15,6 +15,13 @@ compose() {
   docker compose "${COMPOSE_ARGS[@]}" "$@"
 }
 
+if ! docker network inspect dark-net >/dev/null 2>&1; then
+  echo "Docker network 'dark-net' was not found."
+  echo "Start dark-env first from the repository root:"
+  echo "  cd components/blockchain/dark-env && docker compose up -d"
+  exit 1
+fi
+
 wait_ready() {
   local service="$1"
   local cmd="$2"
