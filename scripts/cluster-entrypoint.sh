@@ -2,69 +2,73 @@
 set -eu
 
 CLUSTER_PATH="${CLUSTER_PATH:-/data/ipfs-cluster}"
-PEER_NAME="${CLUSTER_PEERNAME:-cluster-peer}"
-BOOTSTRAP_PEER_HOST="${BOOTSTRAP_PEER_HOST:-}"
+export IPFS_CLUSTER_PATH="${CLUSTER_PATH}"
+PEER_NAME="${CLUSTER_PEERNAME:-storage-node}"
+BOOTSTRAP_HOSTS="${CLUSTER_BOOTSTRAP_HOSTS:-}"
 
 log() {
   printf '[%s] %s\n' "${PEER_NAME}" "$1"
 }
 
+test -r "${CLUSTER_SECRET_FILE}" || {
+  log "Cluster secret is not readable: ${CLUSTER_SECRET_FILE}"
+  exit 1
+}
+CLUSTER_SECRET="$(tr -d '[:space:]' < "${CLUSTER_SECRET_FILE}")"
+case "${CLUSTER_SECRET}" in
+  *[!0-9a-fA-F]*|'')
+    log "Cluster secret must contain exactly 64 hexadecimal characters"
+    exit 1
+    ;;
+esac
+if [ "${#CLUSTER_SECRET}" -ne 64 ]; then
+  log "Cluster secret must contain exactly 64 hexadecimal characters"
+  exit 1
+fi
+export CLUSTER_SECRET
+
 if [ ! -f "${CLUSTER_PATH}/service.json" ]; then
-  log "initializing peer state"
+  log "initializing persistent Cluster identity and CRDT state"
   ipfs-cluster-service init >/dev/null
 fi
 
-configure_service_json() {
-  service_json="${CLUSTER_PATH}/service.json"
-  [ -f "${service_json}" ] || return 0
-
-  proxy_listen="${CLUSTER_IPFSPROXY_LISTENMULTIADDRESS:-${CLUSTER_PROXYAPI_LISTENMULTIADDRESS:-}}"
-  if [ -n "${proxy_listen}" ]; then
-    # ipfs-cluster-service keeps this value in service.json after init; set it
-    # explicitly so the proxy is reachable from sibling containers.
-    sed -i "s#\"listen_multiaddress\": \"/ip4/127.0.0.1/tcp/9095\"#\"listen_multiaddress\": \"${proxy_listen}\"#" "${service_json}"
-  fi
-
-  proxy_node="${CLUSTER_IPFSPROXY_NODEMULTIADDRESS:-${CLUSTER_IPFSHTTP_NODEMULTIADDRESS:-}}"
-  if [ -n "${proxy_node}" ]; then
-    # The proxy has its own backend node_multiaddress and older initialized
-    # volumes keep the localhost default, which is unreachable in this layout.
-    sed -i "s#\"node_multiaddress\": \"/ip4/127.0.0.1/tcp/5001\"#\"node_multiaddress\": \"${proxy_node}\"#" "${service_json}"
-  fi
-}
-
-configure_service_json
-
-resolve_bootstrap_id() {
-  target_host="$1"
-  output="$(ipfs-cluster-ctl --host "/dns4/${target_host}/tcp/9094" id --enc json 2>/dev/null || true)"
-  id_from_json="$(printf '%s' "${output}" | tr -d '\n' | sed -n 's/.*"id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')"
-  if [ -n "${id_from_json}" ]; then
-    printf '%s' "${id_from_json}"
-    return 0
-  fi
-
-  output="$(ipfs-cluster-ctl --host "/dns4/${target_host}/tcp/9094" id 2>/dev/null || true)"
-  id_from_text="$(printf '%s' "${output}" | awk 'NF>0 {print $1; exit}' | tr -d '|')"
-  if [ -n "${id_from_text}" ]; then
-    printf '%s' "${id_from_text}"
-    return 0
-  fi
-
-  return 1
-}
-
-if [ -n "${BOOTSTRAP_PEER_HOST}" ] && [ ! -f "${CLUSTER_PATH}/.bootstrapped" ]; then
-  log "waiting bootstrap peer ${BOOTSTRAP_PEER_HOST}"
-  BOOTSTRAP_ID=""
-  while [ -z "${BOOTSTRAP_ID}" ]; do
-    BOOTSTRAP_ID="$(resolve_bootstrap_id "${BOOTSTRAP_PEER_HOST}" || true)"
-    [ -n "${BOOTSTRAP_ID}" ] || sleep 2
+resolve_bootstraps() {
+  addresses=""
+  for host in ${BOOTSTRAP_HOSTS}; do
+    output="$(ipfs-cluster-ctl --host "/ip4/${host}/tcp/9094" id --enc json 2>/dev/null || true)"
+    remote_id="$(printf '%s' "${output}" | tr -d '\n' | sed -n 's/.*"id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')"
+    if [ -n "${remote_id}" ]; then
+      address="/ip4/${host}/tcp/9096/p2p/${remote_id}"
+      if [ -n "${addresses}" ]; then
+        addresses="${addresses},${address}"
+      else
+        addresses="${address}"
+      fi
+    fi
   done
-  BOOTSTRAP_ADDR="/dns4/${BOOTSTRAP_PEER_HOST}/tcp/9096/p2p/${BOOTSTRAP_ID}"
-  log "bootstrapping with ${BOOTSTRAP_ADDR}"
-  touch "${CLUSTER_PATH}/.bootstrapped"
-  exec ipfs-cluster-service daemon --bootstrap "${BOOTSTRAP_ADDR}"
+  test -n "${addresses}" || return 1
+  printf '%s' "${addresses}"
+}
+
+if [ -n "${BOOTSTRAP_HOSTS}" ]; then
+  log "waiting for an existing Cluster peer over the VPN"
+  BOOTSTRAP_ADDRESSES=""
+  if [ "${CLUSTER_SEED:-false}" = "true" ]; then
+    attempts=0
+    until BOOTSTRAP_ADDRESSES="$(resolve_bootstraps)" || [ "${attempts}" -ge 5 ]; do
+      attempts=$((attempts + 1))
+      sleep 2
+    done
+  else
+    until BOOTSTRAP_ADDRESSES="$(resolve_bootstraps)"; do
+      sleep 2
+    done
+  fi
+  if [ -n "${BOOTSTRAP_ADDRESSES}" ]; then
+    log "joining the global cluster"
+    exec ipfs-cluster-service daemon --bootstrap "${BOOTSTRAP_ADDRESSES}"
+  fi
 fi
 
+log "starting the first peer for cluster ${CLUSTER_CRDT_CLUSTERNAME:-ipfs-cluster}"
 exec ipfs-cluster-service daemon

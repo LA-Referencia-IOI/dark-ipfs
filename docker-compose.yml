@@ -1,21 +1,26 @@
-name: dark-ipfs
+name: dark-ipfs-${NODE_ID}
 
 services:
-  ipfs0:
+  ipfs:
     image: ipfs/kubo:${KUBO_IMAGE_TAG:-v0.41.0}
-    container_name: dark-ipfs-ipfs0
+    container_name: dark-ipfs-${NODE_ID}
     restart: unless-stopped
     entrypoint: ["/usr/local/bin/ipfs-entrypoint.sh"]
     environment:
-      NODE_NAME: ipfs0
+      NODE_NAME: ${NODE_ID}
+      IPFS_ANNOUNCE_MULTIADDRESS: ${IPFS_ANNOUNCE_MULTIADDRESS}
+      IPFS_BOOTSTRAP_HOSTS: ${IPFS_BOOTSTRAP_HOSTS:-}
+      CLUSTER_SEED: ${CLUSTER_SEED:-false}
+      IPFS_SWARM_KEY_FILE: /run/secrets/ipfs-swarm.key
     volumes:
       - ./scripts/ipfs-entrypoint.sh:/usr/local/bin/ipfs-entrypoint.sh:ro
-      - ipfs0-data:/data/ipfs
-      - ipfs0-export:/export
+      - ${IPFS_SWARM_KEY_FILE}:/run/secrets/ipfs-swarm.key:ro
+      - ipfs-data:/data/ipfs
+      - ipfs-export:/export
     ports:
-      - "${IPFS0_API_PORT:-5001}:5001"
-      - "${IPFS0_GATEWAY_BIND:-127.0.0.1}:${IPFS0_GATEWAY_PORT:-38080}:8080"
-      - "${IPFS0_SWARM_PORT:-4001}:4001"
+      - "${VPN_ADDRESS}:5001:5001/tcp"
+      - "${VPN_ADDRESS}:4001:4001/tcp"
+      - "${VPN_ADDRESS}:4001:4001/udp"
     healthcheck:
       test: ["CMD-SHELL", "ipfs id >/dev/null 2>&1"]
       interval: 10s
@@ -23,88 +28,47 @@ services:
       retries: 15
       start_period: 20s
     networks:
-      dark-net:
-        aliases:
-          - ipfs0
-      ipfs-backbone:
+      - storage
 
-  ipfs1:
-    image: ipfs/kubo:${KUBO_IMAGE_TAG:-v0.41.0}
-    container_name: dark-ipfs-ipfs1
-    restart: unless-stopped
-    entrypoint: ["/usr/local/bin/ipfs-entrypoint.sh"]
-    depends_on:
-      ipfs0:
-        condition: service_healthy
-    environment:
-      NODE_NAME: ipfs1
-      BOOTSTRAP_NODE: ipfs0
-    volumes:
-      - ./scripts/ipfs-entrypoint.sh:/usr/local/bin/ipfs-entrypoint.sh:ro
-      - ipfs1-data:/data/ipfs
-      - ipfs1-export:/export
-    healthcheck:
-      test: ["CMD-SHELL", "ipfs id >/dev/null 2>&1"]
-      interval: 10s
-      timeout: 5s
-      retries: 15
-      start_period: 20s
-    networks:
-      - remote-node-1
-      - ipfs-backbone
-
-  ipfs2:
-    image: ipfs/kubo:${KUBO_IMAGE_TAG:-v0.41.0}
-    container_name: dark-ipfs-ipfs2
-    restart: unless-stopped
-    entrypoint: ["/usr/local/bin/ipfs-entrypoint.sh"]
-    depends_on:
-      ipfs0:
-        condition: service_healthy
-    environment:
-      NODE_NAME: ipfs2
-      BOOTSTRAP_NODE: ipfs0
-    volumes:
-      - ./scripts/ipfs-entrypoint.sh:/usr/local/bin/ipfs-entrypoint.sh:ro
-      - ipfs2-data:/data/ipfs
-      - ipfs2-export:/export
-    healthcheck:
-      test: ["CMD-SHELL", "ipfs id >/dev/null 2>&1"]
-      interval: 10s
-      timeout: 5s
-      retries: 15
-      start_period: 20s
-    networks:
-      - remote-node-2
-      - ipfs-backbone
-
-  cluster0:
+  cluster:
     image: ipfs/ipfs-cluster:${IPFS_CLUSTER_IMAGE_TAG:-v1.1.6}
-    container_name: dark-ipfs-cluster0
+    container_name: dark-ipfs-cluster-${NODE_ID}
     restart: unless-stopped
     entrypoint: ["/usr/local/bin/cluster-entrypoint.sh"]
     depends_on:
-      ipfs0:
+      ipfs:
         condition: service_healthy
     environment:
-      CLUSTER_PEERNAME: cluster0
-      CLUSTER_SECRET: ${CLUSTER_SECRET}
+      CLUSTER_PEERNAME: ${NODE_ID}
+      CLUSTER_SECRET_FILE: /run/secrets/ipfs-cluster-secret
       CLUSTER_CONSENSUS: crdt
+      CLUSTER_CRDT_CLUSTERNAME: ${CLUSTER_NAME}
       CLUSTER_CRDT_TRUSTEDPEERS: "*"
-      CLUSTER_REPLICATIONFACTORMIN: ${CLUSTER_REPLICATION_MIN:-2}
-      CLUSTER_REPLICATIONFACTORMAX: ${CLUSTER_REPLICATION_MAX:-2}
-      CLUSTER_IPFSHTTP_NODEMULTIADDRESS: /dns4/ipfs0/tcp/5001
-      CLUSTER_IPFSPROXY_NODEMULTIADDRESS: /dns4/ipfs0/tcp/5001
+      CLUSTER_CRDT_BATCHING_MAXBATCHSIZE: "0"
+      CLUSTER_CRDT_BATCHING_MAXBATCHAGE: 0s
+      CLUSTER_REPLICATIONFACTORMIN: ${CLUSTER_REPLICATION_MIN}
+      CLUSTER_REPLICATIONFACTORMAX: ${CLUSTER_REPLICATION_MAX}
+      CLUSTER_DISABLEREPINNING: "false"
+      CLUSTER_BOOTSTRAP_HOSTS: ${CLUSTER_BOOTSTRAP_HOSTS:-}
+      CLUSTER_SEED: ${CLUSTER_SEED:-false}
+      CLUSTER_ANNOUNCEMULTIADDRESS: ${CLUSTER_ANNOUNCE_MULTIADDRESS}
+      CLUSTER_IPFSHTTP_NODEMULTIADDRESS: /dns4/ipfs/tcp/5001
+      CLUSTER_IPFSPROXY_NODEMULTIADDRESS: /dns4/ipfs/tcp/5001
       CLUSTER_RESTAPI_HTTPLISTENMULTIADDRESS: /ip4/0.0.0.0/tcp/9094
       CLUSTER_IPFSPROXY_LISTENMULTIADDRESS: /ip4/0.0.0.0/tcp/9095
       CLUSTER_PROXYAPI_LISTENMULTIADDRESS: /ip4/0.0.0.0/tcp/9095
+      CLUSTER_TAGS_TAGS: site:${SITE_ID},node:${NODE_ID}
+      CLUSTER_BALANCED_ALLOCATEBY: tag:site,freespace
       CLUSTER_MONITORPINGINTERVAL: 2s
     volumes:
       - ./scripts/cluster-entrypoint.sh:/usr/local/bin/cluster-entrypoint.sh:ro
-      - cluster0-data:/data/ipfs-cluster
+      - ${IPFS_CLUSTER_SECRET_FILE}:/run/secrets/ipfs-cluster-secret:ro
+      - cluster-data:/data/ipfs-cluster
     ports:
-      - "${CLUSTER_API_PORT:-9094}:9094"
-      - "${CLUSTER_PROXY_PORT:-9095}:9095"
+      - "${VPN_ADDRESS}:9094:9094/tcp"
+      - "${VPN_ADDRESS}:9095:9095/tcp"
+      - "${VPN_ADDRESS}:9096:9096/tcp"
+      - "${VPN_ADDRESS}:9096:9096/udp"
     healthcheck:
       test: ["CMD-SHELL", "ipfs-cluster-ctl id >/dev/null 2>&1"]
       interval: 10s
@@ -112,98 +76,17 @@ services:
       retries: 15
       start_period: 20s
     networks:
-      dark-net:
-        aliases:
-          - cluster0
-      ipfs-backbone:
-
-  cluster1:
-    image: ipfs/ipfs-cluster:${IPFS_CLUSTER_IMAGE_TAG:-v1.1.6}
-    container_name: dark-ipfs-cluster1
-    restart: unless-stopped
-    entrypoint: ["/usr/local/bin/cluster-entrypoint.sh"]
-    depends_on:
-      cluster0:
-        condition: service_healthy
-      ipfs1:
-        condition: service_healthy
-    environment:
-      CLUSTER_PEERNAME: cluster1
-      CLUSTER_SECRET: ${CLUSTER_SECRET}
-      CLUSTER_CONSENSUS: crdt
-      CLUSTER_CRDT_TRUSTEDPEERS: "*"
-      CLUSTER_REPLICATIONFACTORMIN: ${CLUSTER_REPLICATION_MIN:-2}
-      CLUSTER_REPLICATIONFACTORMAX: ${CLUSTER_REPLICATION_MAX:-2}
-      CLUSTER_IPFSHTTP_NODEMULTIADDRESS: /dns4/ipfs1/tcp/5001
-      CLUSTER_RESTAPI_HTTPLISTENMULTIADDRESS: /ip4/0.0.0.0/tcp/9094
-      BOOTSTRAP_PEER_HOST: cluster0
-    volumes:
-      - ./scripts/cluster-entrypoint.sh:/usr/local/bin/cluster-entrypoint.sh:ro
-      - cluster1-data:/data/ipfs-cluster
-    healthcheck:
-      test: ["CMD-SHELL", "ipfs-cluster-ctl id >/dev/null 2>&1"]
-      interval: 10s
-      timeout: 5s
-      retries: 15
-      start_period: 20s
-    networks:
-      - remote-node-1
-      - ipfs-backbone
-
-  cluster2:
-    image: ipfs/ipfs-cluster:${IPFS_CLUSTER_IMAGE_TAG:-v1.1.6}
-    container_name: dark-ipfs-cluster2
-    restart: unless-stopped
-    entrypoint: ["/usr/local/bin/cluster-entrypoint.sh"]
-    depends_on:
-      cluster0:
-        condition: service_healthy
-      ipfs2:
-        condition: service_healthy
-    environment:
-      CLUSTER_PEERNAME: cluster2
-      CLUSTER_SECRET: ${CLUSTER_SECRET}
-      CLUSTER_CONSENSUS: crdt
-      CLUSTER_CRDT_TRUSTEDPEERS: "*"
-      CLUSTER_REPLICATIONFACTORMIN: ${CLUSTER_REPLICATION_MIN:-2}
-      CLUSTER_REPLICATIONFACTORMAX: ${CLUSTER_REPLICATION_MAX:-2}
-      CLUSTER_IPFSHTTP_NODEMULTIADDRESS: /dns4/ipfs2/tcp/5001
-      CLUSTER_RESTAPI_HTTPLISTENMULTIADDRESS: /ip4/0.0.0.0/tcp/9094
-      BOOTSTRAP_PEER_HOST: cluster0
-    volumes:
-      - ./scripts/cluster-entrypoint.sh:/usr/local/bin/cluster-entrypoint.sh:ro
-      - cluster2-data:/data/ipfs-cluster
-    healthcheck:
-      test: ["CMD-SHELL", "ipfs-cluster-ctl id >/dev/null 2>&1"]
-      interval: 10s
-      timeout: 5s
-      retries: 15
-      start_period: 20s
-    networks:
-      - remote-node-2
-      - ipfs-backbone
+      - storage
 
 networks:
-  dark-net:
-    external: true
-    name: dark-net
-  ipfs-backbone:
-    name: dark-ipfs-backbone
-    driver: bridge
-  remote-node-1:
-    name: dark-ipfs-remote-node-1
-    driver: bridge
-  remote-node-2:
-    name: dark-ipfs-remote-node-2
+  storage:
+    name: dark-ipfs-${NODE_ID}
     driver: bridge
 
 volumes:
-  ipfs0-data:
-  ipfs0-export:
-  ipfs1-data:
-  ipfs1-export:
-  ipfs2-data:
-  ipfs2-export:
-  cluster0-data:
-  cluster1-data:
-  cluster2-data:
+  ipfs-data:
+    name: dark-ipfs-${NODE_ID}-data
+  ipfs-export:
+    name: dark-ipfs-${NODE_ID}-export
+  cluster-data:
+    name: dark-ipfs-${NODE_ID}-cluster-data

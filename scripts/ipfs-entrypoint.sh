@@ -2,59 +2,64 @@
 set -eu
 
 export IPFS_PATH="${IPFS_PATH:-/data/ipfs}"
-NODE_NAME="${NODE_NAME:-ipfs}"
-BOOTSTRAP_NODE="${BOOTSTRAP_NODE:-}"
+export LIBP2P_FORCE_PNET=1
+NODE_NAME="${NODE_NAME:-storage-node}"
+BOOTSTRAP_HOSTS="${IPFS_BOOTSTRAP_HOSTS:-}"
 
 log() {
   printf '[%s] %s\n' "${NODE_NAME}" "$1"
 }
 
+if [ -n "${IPFS_SWARM_KEY_FILE:-}" ]; then
+  test -r "${IPFS_SWARM_KEY_FILE}" || {
+    log "swarm key is not readable: ${IPFS_SWARM_KEY_FILE}"
+    exit 1
+  }
+  cp "${IPFS_SWARM_KEY_FILE}" "${IPFS_PATH}/swarm.key"
+  chmod 600 "${IPFS_PATH}/swarm.key"
+fi
+
 if [ ! -f "${IPFS_PATH}/config" ]; then
-  log "initializing repo"
+  log "initializing persistent Kubo identity"
   ipfs init --profile=server >/dev/null
-  ipfs config Addresses.API /ip4/0.0.0.0/tcp/5001
-  ipfs config Addresses.Gateway /ip4/0.0.0.0/tcp/8080
-  ipfs config --json Addresses.AppendAnnounce "[\"/dns4/${NODE_NAME}/tcp/4001\"]"
-  ipfs config --json Swarm.AddrFilters "[]"
-  ipfs bootstrap rm --all >/dev/null || true
 fi
 
-if [ -n "${BOOTSTRAP_NODE}" ] && [ ! -f "${IPFS_PATH}/.bootstrap-configured" ]; then
-  log "resolving bootstrap id from ${BOOTSTRAP_NODE}"
-  BOOTSTRAP_ID=""
-  while [ -z "${BOOTSTRAP_ID}" ]; do
-    BOOTSTRAP_ID="$(ipfs --api "/dns4/${BOOTSTRAP_NODE}/tcp/5001" id -f='<id>' 2>/dev/null || true)"
-    [ -n "${BOOTSTRAP_ID}" ] || sleep 2
-  done
-  BOOTSTRAP_ADDR="/dns4/${BOOTSTRAP_NODE}/tcp/4001/p2p/${BOOTSTRAP_ID}"
-  log "adding bootstrap ${BOOTSTRAP_ADDR}"
-  ipfs bootstrap add "${BOOTSTRAP_ADDR}" >/dev/null || true
-  touch "${IPFS_PATH}/.bootstrap-configured"
-fi
+ipfs config Addresses.API /ip4/0.0.0.0/tcp/5001
+ipfs config Addresses.Gateway /ip4/127.0.0.1/tcp/8080
+ipfs config --json Addresses.AppendAnnounce "[\"${IPFS_ANNOUNCE_MULTIADDRESS}\"]"
+ipfs config --json Swarm.AddrFilters "[]"
+ipfs bootstrap rm --all >/dev/null || true
 
-if [ -n "${BOOTSTRAP_NODE}" ]; then
-  BOOTSTRAP_ADDR="$(ipfs bootstrap list | head -n1 || true)"
-  ipfs daemon --migrate=true --agent-version-suffix=dark-ipfs-test &
-  DAEMON_PID=$!
-
-  for _ in $(seq 1 30); do
-    if ipfs --api /ip4/127.0.0.1/tcp/5001 id >/dev/null 2>&1; then
-      break
+resolve_bootstraps() {
+  found=0
+  for host in ${BOOTSTRAP_HOSTS}; do
+    remote_id="$(ipfs --api "/ip4/${host}/tcp/5001" id -f='<id>' 2>/dev/null || true)"
+    if [ -n "${remote_id}" ]; then
+      address="/ip4/${host}/tcp/4001/p2p/${remote_id}"
+      ipfs bootstrap add "${address}" >/dev/null || true
+      log "configured bootstrap ${address}"
+      found=1
     fi
-    sleep 1
   done
+  return "$((1 - found))"
+}
 
-  if [ -n "${BOOTSTRAP_ADDR}" ]; then
-    for _ in $(seq 1 30); do
-      if ipfs --api /ip4/127.0.0.1/tcp/5001 swarm connect "${BOOTSTRAP_ADDR}" >/dev/null 2>&1; then
-        log "connected to bootstrap ${BOOTSTRAP_ADDR}"
-        break
-      fi
+if [ -n "${BOOTSTRAP_HOSTS}" ]; then
+  log "waiting for an existing Kubo peer over the VPN"
+  if [ "${CLUSTER_SEED:-false}" = "true" ]; then
+    attempts=0
+    until resolve_bootstraps || [ "${attempts}" -ge 5 ]; do
+      attempts=$((attempts + 1))
+      sleep 2
+    done
+    if [ -z "$(ipfs bootstrap list 2>/dev/null || true)" ]; then
+      log "no existing peer found; seeding a new private swarm"
+    fi
+  else
+    until resolve_bootstraps; do
       sleep 2
     done
   fi
-
-  wait "${DAEMON_PID}"
-else
-  exec ipfs daemon --migrate=true --agent-version-suffix=dark-ipfs-test
 fi
+
+exec ipfs daemon --migrate=true --agent-version-suffix=dark-ipfs

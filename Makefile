@@ -1,31 +1,34 @@
 SHELL := /bin/bash
 ROOT_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
-COMPOSE := docker compose --project-directory $(ROOT_DIR) -f $(ROOT_DIR)/docker-compose.yml
+ENV_FILE ?= $(ROOT_DIR)/.env.node
+COMPOSE := docker compose --project-directory $(ROOT_DIR) -f $(ROOT_DIR)/docker-compose.yml --env-file $(ENV_FILE)
 
-ifneq ("$(wildcard $(ROOT_DIR)/.env)","")
-COMPOSE += --env-file $(ROOT_DIR)/.env
-endif
+.PHONY: validate up down ps logs identity smoke-test reset
 
-.PHONY: init up down ps logs smoke-test reset
+validate:
+	@test -f "$(ENV_FILE)" || (echo "Missing $(ENV_FILE); generate it with dark-deployer." && exit 1)
+	@$(COMPOSE) config --quiet
 
-init:
-	@if [ ! -f "$(ROOT_DIR)/.env" ]; then cp "$(ROOT_DIR)/.env.example" "$(ROOT_DIR)/.env"; fi
-	@echo "Environment file ready: $(ROOT_DIR)/.env"
+up: validate
+	@$(COMPOSE) up -d
 
-up: init
-	@$(ROOT_DIR)/scripts/bootstrap.sh
-
-down:
+down: validate
 	@$(COMPOSE) down
 
-ps:
+ps: validate
 	@$(COMPOSE) ps
 
-logs:
+logs: validate
 	@$(COMPOSE) logs -f --tail=200
 
-smoke-test:
+identity: validate
+	@$(COMPOSE) exec -T ipfs ipfs id -f='Kubo: <id>\n'
+	@$(COMPOSE) exec -T cluster ipfs-cluster-ctl id --enc json
+
+smoke-test: validate
 	@$(ROOT_DIR)/scripts/smoke-test.sh
 
-reset:
-	@$(COMPOSE) down -v --remove-orphans
+reset: validate
+	@echo "Refusing to delete persistent storage automatically."
+	@echo "Use 'docker compose ... down -v' only after backing up and confirming the exact node."
+	@exit 1
