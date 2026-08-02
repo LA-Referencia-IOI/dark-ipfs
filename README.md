@@ -10,15 +10,17 @@ Every server uses the same Compose file. Multiple servers and sites join one
 global CRDT Cluster over the VPN. Store API is not part of this stack; it runs
 once in each application site and uses both local storage servers.
 
-For the explicit single-machine `developer` profile, the pair also joins the
-external `dark-net` network under the aliases `dark-ipfs-local` and
-`dark-ipfs-cluster-local`. This lets the co-located Store API use private Docker
-networking while the administrative host ports remain bound to loopback. The
-aliases do not replace VPN endpoints in sandbox or production deployments.
+For the single-machine `developer` profile, each pair also joins the external
+`dark-net` network under an installer-generated unique alias. Developer HA runs
+this Compose project twice with different node environment files, ports,
+identities and volumes. This lets the co-located Store API use both peers while
+administrative host ports remain bound to loopback. The aliases do not replace
+VPN endpoints in sandbox or production deployments.
 
 ## Generated configuration
 
-`dark-deployer` generates `.env.node` from `storage-topology.json`. It includes:
+`dark-deployer` generates `.env.node` for a single pair or one
+`.env.node.<node-id>` file per Developer HA peer. It includes:
 
 - the node and site names;
 - the server's VPN address;
@@ -56,6 +58,14 @@ make logs         # follow logs
 make identity     # print persistent Kubo and Cluster identities
 make smoke-test   # add, pin and retrieve through this pair
 make down         # stop containers and preserve volumes
+```
+
+For Developer HA, select a peer explicitly:
+
+```bash
+make identity ENV_FILE=.env.node.site-a-storage-1
+make down ENV_FILE=.env.node.site-a-storage-1
+make up ENV_FILE=.env.node.site-a-storage-1
 ```
 
 There is deliberately no automated volume-reset command. Removing the named

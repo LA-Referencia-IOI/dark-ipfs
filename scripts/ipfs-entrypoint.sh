@@ -41,9 +41,13 @@ ipfs bootstrap rm --all >/dev/null || true
 resolve_bootstraps() {
   found=0
   for host in ${BOOTSTRAP_HOSTS}; do
-    remote_id="$(ipfs --api "/ip4/${host}/tcp/5001" id -f='<id>' 2>/dev/null || true)"
+    protocol="ip4"
+    case "${host}" in
+      *[!0-9.]* ) protocol="dns4" ;;
+    esac
+    remote_id="$(ipfs --api "/${protocol}/${host}/tcp/5001" id -f='<id>' 2>/dev/null || true)"
     if [ -n "${remote_id}" ]; then
-      address="/ip4/${host}/tcp/4001/p2p/${remote_id}"
+      address="/${protocol}/${host}/tcp/4001/p2p/${remote_id}"
       ipfs bootstrap add "${address}" >/dev/null || true
       log "configured bootstrap ${address}"
       found=1

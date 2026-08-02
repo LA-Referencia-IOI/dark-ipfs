@@ -1,4 +1,5 @@
 .env
 .env.node
+.env.node.*
 .tmp/
 .DS_Store

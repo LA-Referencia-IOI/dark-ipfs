@@ -19,9 +19,9 @@ services:
       - ipfs-data:/data/ipfs
       - ipfs-export:/export
     ports:
-      - "${VPN_ADDRESS}:5001:5001/tcp"
-      - "${VPN_ADDRESS}:4001:4001/tcp"
-      - "${VPN_ADDRESS}:4001:4001/udp"
+      - "${HOST_BIND_ADDRESS}:${IPFS_API_HOST_PORT}:5001/tcp"
+      - "${HOST_BIND_ADDRESS}:${IPFS_SWARM_HOST_PORT}:4001/tcp"
+      - "${HOST_BIND_ADDRESS}:${IPFS_SWARM_HOST_PORT}:4001/udp"
     healthcheck:
       test: ["CMD-SHELL", "ipfs id >/dev/null 2>&1"]
       interval: 10s
@@ -32,7 +32,7 @@ services:
       storage:
       dark-net:
         aliases:
-          - dark-ipfs-local
+          - ${IPFS_DARK_NET_ALIAS}
 
   cluster:
     image: ipfs/ipfs-cluster:${IPFS_CLUSTER_IMAGE_TAG:-v1.1.6}
@@ -69,10 +69,10 @@ services:
       - ${IPFS_CLUSTER_SECRET_FILE}:/run/secrets/ipfs-cluster-secret:ro
       - cluster-data:/data/ipfs-cluster
     ports:
-      - "${VPN_ADDRESS}:9094:9094/tcp"
-      - "${VPN_ADDRESS}:9095:9095/tcp"
-      - "${VPN_ADDRESS}:9096:9096/tcp"
-      - "${VPN_ADDRESS}:9096:9096/udp"
+      - "${HOST_BIND_ADDRESS}:${CLUSTER_REST_HOST_PORT}:9094/tcp"
+      - "${HOST_BIND_ADDRESS}:${CLUSTER_PROXY_HOST_PORT}:9095/tcp"
+      - "${HOST_BIND_ADDRESS}:${CLUSTER_SWARM_HOST_PORT}:9096/tcp"
+      - "${HOST_BIND_ADDRESS}:${CLUSTER_SWARM_HOST_PORT}:9096/udp"
     healthcheck:
       test: ["CMD-SHELL", "ipfs-cluster-ctl id >/dev/null 2>&1"]
       interval: 10s
@@ -83,7 +83,7 @@ services:
       storage:
       dark-net:
         aliases:
-          - dark-ipfs-cluster-local
+          - ${CLUSTER_DARK_NET_ALIAS}
 
 networks:
   storage:
