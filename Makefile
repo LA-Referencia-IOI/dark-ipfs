@@ -23,7 +23,7 @@ logs: validate
 
 identity: validate
 	@$(COMPOSE) exec -T ipfs ipfs id -f='Kubo: <id>\n'
-	@$(COMPOSE) exec -T cluster ipfs-cluster-ctl id --enc json
+	@$(COMPOSE) exec -T cluster ipfs-cluster-ctl id
 
 smoke-test: validate
 	@$(ROOT_DIR)/scripts/smoke-test.sh

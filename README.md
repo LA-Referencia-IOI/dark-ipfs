@@ -10,6 +10,12 @@ Every server uses the same Compose file. Multiple servers and sites join one
 global CRDT Cluster over the VPN. Store API is not part of this stack; it runs
 once in each application site and uses both local storage servers.
 
+For the explicit single-machine `developer` profile, the pair also joins the
+external `dark-net` network under the aliases `dark-ipfs-local` and
+`dark-ipfs-cluster-local`. This lets the co-located Store API use private Docker
+networking while the administrative host ports remain bound to loopback. The
+aliases do not replace VPN endpoints in sandbox or production deployments.
+
 ## Generated configuration
 
 `dark-deployer` generates `.env.node` from `storage-topology.json`. It includes:
@@ -24,6 +30,11 @@ The secret files are mounted read-only. `.env.node`, persistent identities and
 data volumes are never committed. The first peer in the topology seeds a new
 Cluster; every other peer discovers a running peer's persistent identity through
 its private API and joins it.
+
+The entrypoint applies Kubo's `autoconf-off` profile on every start and disables
+anonymous telemetry. Private swarms use only their explicitly configured
+bootstrap peers and do not inherit discovery, routing, publishing or AutoTLS
+endpoints from the public IPFS mainnet.
 
 Required VPN connectivity:
 

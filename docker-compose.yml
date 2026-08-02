@@ -8,6 +8,7 @@ services:
     entrypoint: ["/usr/local/bin/ipfs-entrypoint.sh"]
     environment:
       NODE_NAME: ${NODE_ID}
+      IPFS_TELEMETRY: "off"
       IPFS_ANNOUNCE_MULTIADDRESS: ${IPFS_ANNOUNCE_MULTIADDRESS}
       IPFS_BOOTSTRAP_HOSTS: ${IPFS_BOOTSTRAP_HOSTS:-}
       CLUSTER_SEED: ${CLUSTER_SEED:-false}
@@ -28,7 +29,10 @@ services:
       retries: 15
       start_period: 20s
     networks:
-      - storage
+      storage:
+      dark-net:
+        aliases:
+          - dark-ipfs-local
 
   cluster:
     image: ipfs/ipfs-cluster:${IPFS_CLUSTER_IMAGE_TAG:-v1.1.6}
@@ -76,12 +80,18 @@ services:
       retries: 15
       start_period: 20s
     networks:
-      - storage
+      storage:
+      dark-net:
+        aliases:
+          - dark-ipfs-cluster-local
 
 networks:
   storage:
     name: dark-ipfs-${NODE_ID}
     driver: bridge
+  dark-net:
+    external: true
+    name: dark-net
 
 volumes:
   ipfs-data:

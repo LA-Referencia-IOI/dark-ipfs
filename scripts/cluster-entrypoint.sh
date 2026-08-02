@@ -35,8 +35,12 @@ fi
 resolve_bootstraps() {
   addresses=""
   for host in ${BOOTSTRAP_HOSTS}; do
-    output="$(ipfs-cluster-ctl --host "/ip4/${host}/tcp/9094" id --enc json 2>/dev/null || true)"
-    remote_id="$(printf '%s' "${output}" | tr -d '\n' | sed -n 's/.*"id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')"
+    output="$(ipfs-cluster-ctl --host "/ip4/${host}/tcp/9094" --enc json id 2>/dev/null || true)"
+    remote_id="$(
+      printf '%s\n' "${output}" \
+        | sed -n 's/^[[:space:]]*"id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
+        | sed -n '1p'
+    )"
     if [ -n "${remote_id}" ]; then
       address="/ip4/${host}/tcp/9096/p2p/${remote_id}"
       if [ -n "${addresses}" ]; then

@@ -24,6 +24,14 @@ if [ ! -f "${IPFS_PATH}/config" ]; then
   ipfs init --profile=server >/dev/null
 fi
 
+# Private swarms must not inherit public-mainnet discovery endpoints. Kubo
+# v0.41+ refuses to start with its default AutoConf URL when swarm.key is
+# present. The official profile also clears delegated public routers,
+# publishers and DNS resolvers, and disables AutoTLS for the private network.
+ipfs config profile apply autoconf-off >/dev/null
+ipfs config Routing.Type dht
+ipfs config --json AutoTLS.Enabled false
+ipfs config --json Swarm.Transports.Network.Websocket false
 ipfs config Addresses.API /ip4/0.0.0.0/tcp/5001
 ipfs config Addresses.Gateway /ip4/127.0.0.1/tcp/8080
 ipfs config --json Addresses.AppendAnnounce "[\"${IPFS_ANNOUNCE_MULTIADDRESS}\"]"
