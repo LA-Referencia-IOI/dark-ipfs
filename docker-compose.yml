@@ -61,8 +61,9 @@ services:
       CLUSTER_RESTAPI_HTTPLISTENMULTIADDRESS: /ip4/0.0.0.0/tcp/9094
       CLUSTER_IPFSPROXY_LISTENMULTIADDRESS: /ip4/0.0.0.0/tcp/9095
       CLUSTER_PROXYAPI_LISTENMULTIADDRESS: /ip4/0.0.0.0/tcp/9095
-      CLUSTER_TAGS_TAGS: site:${SITE_ID},node:${NODE_ID}
-      CLUSTER_BALANCED_ALLOCATEBY: tag:site,freespace
+      # Allocation is governed only by replication factors. Node/site tags are
+      # not part of dARK's publication or durability policy.
+      CLUSTER_BALANCED_ALLOCATEBY: freespace
       CLUSTER_MONITORPINGINTERVAL: 2s
     volumes:
       - ./scripts/cluster-entrypoint.sh:/usr/local/bin/cluster-entrypoint.sh:ro

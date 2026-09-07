@@ -34,7 +34,13 @@ ipfs config --json AutoTLS.Enabled false
 ipfs config --json Swarm.Transports.Network.Websocket false
 ipfs config Addresses.API /ip4/0.0.0.0/tcp/5001
 ipfs config Addresses.Gateway /ip4/127.0.0.1/tcp/8080
-ipfs config --json Addresses.AppendAnnounce "[\"${IPFS_ANNOUNCE_MULTIADDRESS}\"]"
+if [ -n "${IPFS_ANNOUNCE_MULTIADDRESS:-}" ]; then
+  ipfs config --json Addresses.AppendAnnounce "[\"${IPFS_ANNOUNCE_MULTIADDRESS}\"]"
+else
+  # An empty string is not a valid multiaddr and makes Kubo fail during node
+  # construction. Keep the list empty for environments that do not announce.
+  ipfs config --json Addresses.AppendAnnounce "[]"
+fi
 ipfs config --json Swarm.AddrFilters "[]"
 ipfs bootstrap rm --all >/dev/null || true
 
