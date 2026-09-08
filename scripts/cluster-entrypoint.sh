@@ -32,6 +32,18 @@ if [ ! -f "${CLUSTER_PATH}/service.json" ]; then
   ipfs-cluster-service init >/dev/null
 fi
 
+# `service.json` is persistent and environment variables are only consumed by
+# the image during initialization. Keep the operational pin concurrency
+# deterministic when an existing volume is reused.
+PIN_CONCURRENCY="${CLUSTER_PINTRACKER_CONCURRENTPINS:-10}"
+case "${PIN_CONCURRENCY}" in
+  ''|*[!0-9]*) log "CLUSTER_PINTRACKER_CONCURRENTPINS must be numeric"; exit 1 ;;
+esac
+KUBO_ALIAS="${IPFS_DARK_NET_ALIAS:-ipfs}"
+sed -E -i "s/(\"concurrent_pins\"[[:space:]]*:[[:space:]]*)[0-9]+/\1${PIN_CONCURRENCY}/" "${CLUSTER_PATH}/service.json"
+sed -E -i "s#(\"node_multiaddress\"[[:space:]]*:[[:space:]]*\")/dns4/[^\"]+/tcp/5001#\1/dns4/${KUBO_ALIAS}/tcp/5001#" "${CLUSTER_PATH}/service.json"
+log "pin tracker concurrency=${PIN_CONCURRENCY}; kubo=/dns4/${IPFS_DARK_NET_ALIAS:-ipfs}/tcp/5001"
+
 resolve_bootstraps() {
   addresses=""
   for host in ${BOOTSTRAP_HOSTS}; do
