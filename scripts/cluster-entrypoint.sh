@@ -41,7 +41,13 @@ case "${PIN_CONCURRENCY}" in
 esac
 KUBO_ALIAS="${IPFS_DARK_NET_ALIAS:-ipfs}"
 sed -E -i "s/(\"concurrent_pins\"[[:space:]]*:[[:space:]]*)[0-9]+/\1${PIN_CONCURRENCY}/" "${CLUSTER_PATH}/service.json"
-sed -E -i "s#(\"node_multiaddress\"[[:space:]]*:[[:space:]]*\")/dns4/[^\"]+/tcp/5001#\1/dns4/${KUBO_ALIAS}/tcp/5001#" "${CLUSTER_PATH}/service.json"
+# Kubo's freshly initialized config may use /ip4/127.0.0.1 rather than
+# /dns4/...; normalize either form so Cluster never falls back to localhost.
+sed -E -i "s#(\"node_multiaddress\"[[:space:]]*:[[:space:]]*\")[^\"]+/tcp/5001#\1/dns4/${KUBO_ALIAS}/tcp/5001#" "${CLUSTER_PATH}/service.json"
+# Cluster initializes its HTTP listeners on loopback; replace those listener
+# addresses so peers on the shared Docker/VPN network can reach REST, proxy,
+# and pinning endpoints.
+sed -E -i 's#/ip4/127\.0\.0\.1/tcp/(9094|9095|9096|9097)#/ip4/0.0.0.0/tcp/\1#g' "${CLUSTER_PATH}/service.json"
 log "pin tracker concurrency=${PIN_CONCURRENCY}; kubo=/dns4/${IPFS_DARK_NET_ALIAS:-ipfs}/tcp/5001"
 
 resolve_bootstraps() {
