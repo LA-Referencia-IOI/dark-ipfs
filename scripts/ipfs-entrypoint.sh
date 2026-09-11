@@ -4,7 +4,7 @@ set -eu
 export IPFS_PATH="${IPFS_PATH:-/data/ipfs}"
 export LIBP2P_FORCE_PNET=1
 NODE_NAME="${NODE_NAME:-storage-node}"
-BOOTSTRAP_HOSTS="${IPFS_BOOTSTRAP_HOSTS:-}"
+BOOTSTRAP_MULTIADDRESSES="${IPFS_BOOTSTRAP_MULTIADDRESSES:-}"
 
 log() {
   printf '[%s] %s\n' "${NODE_NAME}" "$1"
@@ -46,23 +46,18 @@ ipfs bootstrap rm --all >/dev/null || true
 
 resolve_bootstraps() {
   found=0
-  for host in ${BOOTSTRAP_HOSTS}; do
-    protocol="ip4"
-    case "${host}" in
-      *[!0-9.]* ) protocol="dns4" ;;
-    esac
-    remote_id="$(ipfs --api "/${protocol}/${host}/tcp/5001" id -f='<id>' 2>/dev/null || true)"
-    if [ -n "${remote_id}" ]; then
-      address="/${protocol}/${host}/tcp/4001/p2p/${remote_id}"
+  for api_address in ${BOOTSTRAP_MULTIADDRESSES}; do
+    addresses="$(ipfs --api "${api_address}" id -f='<addrs>' 2>/dev/null || true)"
+    for address in ${addresses}; do
       ipfs bootstrap add "${address}" >/dev/null || true
       log "configured bootstrap ${address}"
       found=1
-    fi
+    done
   done
   return "$((1 - found))"
 }
 
-if [ -n "${BOOTSTRAP_HOSTS}" ]; then
+if [ -n "${BOOTSTRAP_MULTIADDRESSES}" ]; then
   log "waiting for an existing Kubo peer over the VPN"
   if [ "${CLUSTER_SEED:-false}" = "true" ]; then
     attempts=0

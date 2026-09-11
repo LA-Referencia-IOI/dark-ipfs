@@ -4,7 +4,7 @@ set -eu
 CLUSTER_PATH="${CLUSTER_PATH:-/data/ipfs-cluster}"
 export IPFS_CLUSTER_PATH="${CLUSTER_PATH}"
 PEER_NAME="${CLUSTER_PEERNAME:-storage-node}"
-BOOTSTRAP_HOSTS="${CLUSTER_BOOTSTRAP_HOSTS:-}"
+BOOTSTRAP_MULTIADDRESSES="${CLUSTER_BOOTSTRAP_MULTIADDRESSES:-}"
 
 log() {
   printf '[%s] %s\n' "${PEER_NAME}" "$1"
@@ -52,31 +52,17 @@ log "pin tracker concurrency=${PIN_CONCURRENCY}; kubo=/dns4/${IPFS_DARK_NET_ALIA
 
 resolve_bootstraps() {
   addresses=""
-  for host in ${BOOTSTRAP_HOSTS}; do
-    protocol="ip4"
-    case "${host}" in
-      *[!0-9.]* ) protocol="dns4" ;;
-    esac
-    output="$(ipfs-cluster-ctl --host "/${protocol}/${host}/tcp/9094" --enc json id 2>/dev/null || true)"
-    remote_id="$(
-      printf '%s\n' "${output}" \
-        | sed -n 's/^[[:space:]]*"id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
-        | sed -n '1p'
-    )"
-    if [ -n "${remote_id}" ]; then
-      address="/${protocol}/${host}/tcp/9096/p2p/${remote_id}"
-      if [ -n "${addresses}" ]; then
-        addresses="${addresses},${address}"
-      else
-        addresses="${address}"
-      fi
-    fi
+  for api_address in ${BOOTSTRAP_MULTIADDRESSES}; do
+    output="$(ipfs-cluster-ctl --host "${api_address}" --enc json id 2>/dev/null || true)"
+    for address in $(printf '%s\n' "${output}" | sed -n 's/^[[:space:]]*"\(\/[^" ]*\/p2p\/[^" ]*\)".*/\1/p'); do
+      if [ -n "${addresses}" ]; then addresses="${addresses},${address}"; else addresses="${address}"; fi
+    done
   done
   test -n "${addresses}" || return 1
   printf '%s' "${addresses}"
 }
 
-if [ -n "${BOOTSTRAP_HOSTS}" ]; then
+if [ -n "${BOOTSTRAP_MULTIADDRESSES}" ]; then
   log "waiting for an existing Cluster peer over the VPN"
   BOOTSTRAP_ADDRESSES=""
   if [ "${CLUSTER_SEED:-false}" = "true" ]; then
