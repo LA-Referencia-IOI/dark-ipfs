@@ -4,7 +4,8 @@ set -eu
 CLUSTER_PATH="${CLUSTER_PATH:-/data/ipfs-cluster}"
 export IPFS_CLUSTER_PATH="${CLUSTER_PATH}"
 PEER_NAME="${CLUSTER_PEERNAME:-storage-node}"
-BOOTSTRAP_MULTIADDRESSES="${CLUSTER_BOOTSTRAP_MULTIADDRESSES:-}"
+BOOTSTRAP_ENDPOINTS="${CLUSTER_BOOTSTRAP_ENDPOINTS:-${CLUSTER_BOOTSTRAP_API_MULTIADDRESSES:-${CLUSTER_BOOTSTRAP_MULTIADDRESSES:-}}}"
+BOOTSTRAP_P2P_PORT="${CLUSTER_BOOTSTRAP_P2P_PORT:-9096}"
 
 log() {
   printf '[%s] %s\n' "${PEER_NAME}" "$1"
@@ -48,21 +49,43 @@ sed -E -i "s#(\"node_multiaddress\"[[:space:]]*:[[:space:]]*\")[^\"]+/tcp/5001#\
 # addresses so peers on the shared Docker/VPN network can reach REST, proxy,
 # and pinning endpoints.
 sed -E -i 's#/ip4/127\.0\.0\.1/tcp/(9094|9095|9096|9097)#/ip4/0.0.0.0/tcp/\1#g' "${CLUSTER_PATH}/service.json"
+if [ -n "${CLUSTER_ANNOUNCE_MULTIADDRESS:-}" ]; then
+  sed -E -i "s#\"announce_multiaddress\"[[:space:]]*:[[:space:]]*\[[^]]*\]#\"announce_multiaddress\": [\"${CLUSTER_ANNOUNCE_MULTIADDRESS}\"]#" "${CLUSTER_PATH}/service.json"
+fi
 log "pin tracker concurrency=${PIN_CONCURRENCY}; kubo=/dns4/${IPFS_DARK_NET_ALIAS:-ipfs}/tcp/5001"
 
 resolve_bootstraps() {
   addresses=""
-  for api_address in ${BOOTSTRAP_MULTIADDRESSES}; do
+  for endpoint in ${BOOTSTRAP_ENDPOINTS}; do
+    api_address="${endpoint%@*}"
+    endpoint_port="${endpoint##*@}"
+    [ "${endpoint_port}" = "${endpoint}" ] && endpoint_port="${BOOTSTRAP_P2P_PORT}"
     output="$(ipfs-cluster-ctl --host "${api_address}" --enc json id 2>/dev/null || true)"
-    for address in $(printf '%s\n' "${output}" | sed -n 's/^[[:space:]]*"\(\/[^" ]*\/p2p\/[^" ]*\)".*/\1/p'); do
-      if [ -n "${addresses}" ]; then addresses="${addresses},${address}"; else addresses="${address}"; fi
-    done
+    # A remote Cluster API reports the Docker-private addresses of its own
+    # container (for example 172.30.x.x). They are not routable from another
+    # host. For an /ip4 bootstrap, retain the reachable host address from the
+    # inventory and pair it with the peer ID returned by the API.
+    case "${api_address}" in
+      /ip4/*/tcp/*)
+        host_address="$(printf '%s\n' "${api_address}" | sed -n 's#^/ip4/\([^/]*\)/tcp/.*#\1#p')"
+        peer_id="$(printf '%s\n' "${output}" | sed -n 's/^[[:space:]]*"id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)"
+        if [ -n "${host_address}" ] && [ -n "${peer_id}" ]; then
+          address="/ip4/${host_address}/tcp/${endpoint_port}/p2p/${peer_id}"
+          if [ -n "${addresses}" ]; then addresses="${addresses},${address}"; else addresses="${address}"; fi
+        fi
+        ;;
+      *)
+        for address in $(printf '%s\n' "${output}" | sed -n 's/^[[:space:]]*"\(\/[^" ]*\/p2p\/[^" ]*\)".*/\1/p'); do
+          if [ -n "${addresses}" ]; then addresses="${addresses},${address}"; else addresses="${address}"; fi
+        done
+        ;;
+    esac
   done
   test -n "${addresses}" || return 1
   printf '%s' "${addresses}"
 }
 
-if [ -n "${BOOTSTRAP_MULTIADDRESSES}" ]; then
+if [ -n "${BOOTSTRAP_ENDPOINTS}" ]; then
   log "waiting for an existing Cluster peer over the VPN"
   BOOTSTRAP_ADDRESSES=""
   if [ "${CLUSTER_SEED:-false}" = "true" ]; then

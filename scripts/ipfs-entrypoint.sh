@@ -4,7 +4,8 @@ set -eu
 export IPFS_PATH="${IPFS_PATH:-/data/ipfs}"
 export LIBP2P_FORCE_PNET=1
 NODE_NAME="${NODE_NAME:-storage-node}"
-BOOTSTRAP_MULTIADDRESSES="${IPFS_BOOTSTRAP_ENDPOINTS:-}"
+BOOTSTRAP_ENDPOINTS="${IPFS_BOOTSTRAP_ENDPOINTS:-${IPFS_BOOTSTRAP_API_MULTIADDRESSES:-${IPFS_BOOTSTRAP_MULTIADDRESSES:-}}}"
+BOOTSTRAP_P2P_PORT="${IPFS_BOOTSTRAP_P2P_PORT:-4001}"
 
 log() {
   printf '[%s] %s\n' "${NODE_NAME}" "$1"
@@ -46,18 +47,35 @@ ipfs bootstrap rm --all >/dev/null || true
 
 resolve_bootstraps() {
   found=0
-  for api_address in ${BOOTSTRAP_MULTIADDRESSES}; do
-    addresses="$(ipfs --api "${api_address}" id -f='<addrs>' 2>/dev/null || true)"
-    for address in ${addresses}; do
-      ipfs bootstrap add "${address}" >/dev/null || true
-      log "configured bootstrap ${address}"
-      found=1
-    done
+  for endpoint in ${BOOTSTRAP_ENDPOINTS}; do
+    api_address="${endpoint%@*}"
+    endpoint_port="${endpoint##*@}"
+    [ "${endpoint_port}" = "${endpoint}" ] && endpoint_port="${BOOTSTRAP_P2P_PORT}"
+    case "${api_address}" in
+      /ip4/*/tcp/*)
+        host_address="$(printf '%s\n' "${api_address}" | sed -n 's#^/ip4/\([^/]*\)/tcp/.*#\1#p')"
+        peer_id="$(ipfs --api "${api_address}" id -f='<id>' 2>/dev/null || true)"
+        if [ -n "${host_address}" ] && [ -n "${peer_id}" ]; then
+          address="/ip4/${host_address}/tcp/${endpoint_port}/p2p/${peer_id}"
+          ipfs bootstrap add "${address}" >/dev/null || true
+          log "configured bootstrap ${address}"
+          found=1
+        fi
+        ;;
+      *)
+        addresses="$(ipfs --api "${api_address}" id -f='<addrs>' 2>/dev/null || true)"
+        for address in ${addresses}; do
+          ipfs bootstrap add "${address}" >/dev/null || true
+          log "configured bootstrap ${address}"
+          found=1
+        done
+        ;;
+    esac
   done
   return "$((1 - found))"
 }
 
-if [ -n "${BOOTSTRAP_MULTIADDRESSES}" ]; then
+if [ -n "${BOOTSTRAP_ENDPOINTS}" ]; then
   log "waiting for an existing Kubo peer over the VPN"
   if [ "${CLUSTER_SEED:-false}" = "true" ]; then
     attempts=0
