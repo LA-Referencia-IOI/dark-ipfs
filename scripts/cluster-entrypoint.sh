@@ -49,7 +49,12 @@ sed -E -i "s#(\"node_multiaddress\"[[:space:]]*:[[:space:]]*\")[^\"]+/tcp/5001#\
 # addresses so peers on the shared Docker/VPN network can reach REST, proxy,
 # and pinning endpoints.
 sed -E -i 's#/ip4/127\.0\.0\.1/tcp/(9094|9095|9096|9097)#/ip4/0.0.0.0/tcp/\1#g' "${CLUSTER_PATH}/service.json"
-if [ -n "${CLUSTER_ANNOUNCE_MULTIADDRESS:-}" ]; then
+if [ -n "${CLUSTER_ANNOUNCE_MULTIADDRESSES:-}" ]; then
+  # The value is generated as compact JSON by the deployer.  It replaces the
+  # whole array atomically, preserving persistent identity and CRDT state.
+  sed -E -i "s#\"announce_multiaddress\"[[:space:]]*:[[:space:]]*\[[^]]*\]#\"announce_multiaddress\": ${CLUSTER_ANNOUNCE_MULTIADDRESSES}#" "${CLUSTER_PATH}/service.json"
+elif [ -n "${CLUSTER_ANNOUNCE_MULTIADDRESS:-}" ]; then
+  # Compatibility with older single-address bundles.
   sed -E -i "s#\"announce_multiaddress\"[[:space:]]*:[[:space:]]*\[[^]]*\]#\"announce_multiaddress\": [\"${CLUSTER_ANNOUNCE_MULTIADDRESS}\"]#" "${CLUSTER_PATH}/service.json"
 fi
 log "pin tracker concurrency=${PIN_CONCURRENCY}; kubo=/dns4/${IPFS_DARK_NET_ALIAS:-ipfs}/tcp/5001"

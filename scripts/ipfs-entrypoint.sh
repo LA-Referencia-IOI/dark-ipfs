@@ -29,13 +29,26 @@ fi
 # v0.41+ refuses to start with its default AutoConf URL when swarm.key is
 # present. The official profile also clears delegated public routers,
 # publishers and DNS resolvers, and disables AutoTLS for the private network.
-ipfs config profile apply autoconf-off >/dev/null
+# Keep the profile as a convenience on releases that provide it, but declare
+# every relevant field below: development builds carrying the Bitswap startup
+# fix may not include the profile.
+ipfs config profile apply autoconf-off >/dev/null 2>&1 || \
+  log "autoconf-off profile unavailable; applying explicit private-swarm settings"
+ipfs config --json AutoConf.Enabled false
+ipfs config --json DNS.Resolvers null
+ipfs config --json Routing.DelegatedRouters null
+ipfs config --json Ipns.DelegatedPublishers null
 ipfs config Routing.Type dht
 ipfs config --json AutoTLS.Enabled false
 ipfs config --json Swarm.Transports.Network.Websocket false
 ipfs config Addresses.API /ip4/0.0.0.0/tcp/5001
 ipfs config Addresses.Gateway /ip4/127.0.0.1/tcp/8080
-if [ -n "${IPFS_ANNOUNCE_MULTIADDRESS:-}" ]; then
+if [ -n "${IPFS_ANNOUNCE_MULTIADDRESSES:-}" ]; then
+  # The renderer provides a JSON array so a node can announce both its site
+  # LAN and its inter-site VPN address.  Kubo validates multiaddrs itself.
+  ipfs config --json Addresses.AppendAnnounce "${IPFS_ANNOUNCE_MULTIADDRESSES}"
+elif [ -n "${IPFS_ANNOUNCE_MULTIADDRESS:-}" ]; then
+  # Compatibility with bundles rendered before the multisite contract.
   ipfs config --json Addresses.AppendAnnounce "[\"${IPFS_ANNOUNCE_MULTIADDRESS}\"]"
 else
   # An empty string is not a valid multiaddr and makes Kubo fail during node
