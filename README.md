@@ -33,6 +33,13 @@ data volumes are never committed. The first peer in the topology seeds a new
 Cluster; every other peer discovers a running peer's persistent identity through
 its private API and joins it.
 
+## Logging
+
+The deployer passes `GOLOG_LOG_LEVEL` to both Kubo and IPFS Cluster. Production
+uses `warning` by default; set `settings.ipfs.logging.level` to `DEBUG` in a
+local or diagnostic inventory to include detailed daemon logs. The entrypoint's
+startup messages remain intentionally concise.
+
 The entrypoint applies Kubo's `autoconf-off` profile on every start and disables
 anonymous telemetry. Private swarms use only their explicitly configured
 bootstrap peers and do not inherit discovery, routing, publishing or AutoTLS
