@@ -84,3 +84,18 @@ Global audits and allocation repair run from `dark-deployer`:
 python3 install.py storage audit
 python3 install.py storage reconcile
 ```
+
+## Persistent repositories after a peer outage
+
+Kubo and Cluster entrypoints initialize identities and wait for bootstrap APIs only for a new repository. On restart, an existing repository starts its daemon using stored peer routes and state, even when all configured bootstrap APIs are unavailable. Kubo preserves its existing bootstrap list instead of clearing it on every restart. This lets a surviving node serve recovery data independently.
+
+The bootstrap endpoint environment variables are used for initial discovery; reconcile stored peer routes explicitly when hosts change addresses. API management addresses and advertised P2P addresses may differ. Preserve identities, swarm/Cluster secrets and CRDT state while updating routes. Greenfield seed behavior remains supported.
+
+
+Run the entrypoint regression tests without Docker or network access:
+
+```sh
+python3 -m unittest discover -s tests -p 'test_*entrypoint_restart.py'
+```
+
+These tests exercise persistent startup with unavailable bootstrap APIs, preservation of saved routes, and initial discovery for new seed and non-seed repositories. The Cluster tests mock Linux-only in-place configuration edits on macOS; they verify startup ordering rather than listener configuration. The restart behavior was also exercised with real Kubo and Cluster containers in the isolated AWS backup lab.

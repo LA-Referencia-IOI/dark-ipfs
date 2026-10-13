@@ -6,6 +6,7 @@ export LIBP2P_FORCE_PNET=1
 NODE_NAME="${NODE_NAME:-storage-node}"
 BOOTSTRAP_ENDPOINTS="${IPFS_BOOTSTRAP_ENDPOINTS:-${IPFS_BOOTSTRAP_API_MULTIADDRESSES:-${IPFS_BOOTSTRAP_MULTIADDRESSES:-}}}"
 BOOTSTRAP_P2P_PORT="${IPFS_BOOTSTRAP_P2P_PORT:-4001}"
+NEW_REPOSITORY=0
 
 log() {
   printf '[%s] %s\n' "${NODE_NAME}" "$1"
@@ -23,6 +24,7 @@ fi
 if [ ! -f "${IPFS_PATH}/config" ]; then
   log "initializing persistent Kubo identity"
   ipfs init --profile=server >/dev/null
+  NEW_REPOSITORY=1
 fi
 
 # Private swarms must not inherit public-mainnet discovery endpoints. Kubo
@@ -56,7 +58,11 @@ else
   ipfs config --json Addresses.AppendAnnounce "[]"
 fi
 ipfs config --json Swarm.AddrFilters "[]"
-ipfs bootstrap rm --all >/dev/null || true
+# Existing private repositories retain known peers across an outage or remap.
+# Clear public defaults only when initializing a new repository.
+if [ "${NEW_REPOSITORY}" -eq 1 ]; then
+  ipfs bootstrap rm --all >/dev/null || true
+fi
 
 resolve_bootstraps() {
   found=0
@@ -67,7 +73,7 @@ resolve_bootstraps() {
     case "${api_address}" in
       /ip4/*/tcp/*)
         host_address="$(printf '%s\n' "${api_address}" | sed -n 's#^/ip4/\([^/]*\)/tcp/.*#\1#p')"
-        peer_id="$(ipfs --api "${api_address}" id -f='<id>' 2>/dev/null || true)"
+        peer_id="$(ipfs --timeout=3s --api "${api_address}" id -f='<id>' 2>/dev/null || true)"
         if [ -n "${host_address}" ] && [ -n "${peer_id}" ]; then
           address="/ip4/${host_address}/tcp/${endpoint_port}/p2p/${peer_id}"
           ipfs bootstrap add "${address}" >/dev/null || true
@@ -76,7 +82,7 @@ resolve_bootstraps() {
         fi
         ;;
       *)
-        addresses="$(ipfs --api "${api_address}" id -f='<addrs>' 2>/dev/null || true)"
+        addresses="$(ipfs --timeout=3s --api "${api_address}" id -f='<addrs>' 2>/dev/null || true)"
         for address in ${addresses}; do
           ipfs bootstrap add "${address}" >/dev/null || true
           log "configured bootstrap ${address}"
@@ -88,7 +94,7 @@ resolve_bootstraps() {
   return "$((1 - found))"
 }
 
-if [ -n "${BOOTSTRAP_ENDPOINTS}" ]; then
+if [ "${NEW_REPOSITORY}" -eq 1 ] && [ -n "${BOOTSTRAP_ENDPOINTS}" ]; then
   log "waiting for an existing Kubo peer over the VPN"
   if [ "${CLUSTER_SEED:-false}" = "true" ]; then
     attempts=0
@@ -104,6 +110,11 @@ if [ -n "${BOOTSTRAP_ENDPOINTS}" ]; then
       sleep 2
     done
   fi
+elif [ "${NEW_REPOSITORY}" -eq 0 ]; then
+  # A surviving repository must be able to serve its blocks even when every
+  # configured peer is unavailable. Its stored bootstrap routes remain intact;
+  # route reconciliation is an explicit operation when the topology changes.
+  log "starting the persistent private repository with its stored peer routes"
 fi
 
 exec ipfs daemon --migrate=true --agent-version-suffix=dark-ipfs

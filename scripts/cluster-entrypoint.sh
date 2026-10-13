@@ -6,6 +6,7 @@ export IPFS_CLUSTER_PATH="${CLUSTER_PATH}"
 PEER_NAME="${CLUSTER_PEERNAME:-storage-node}"
 BOOTSTRAP_ENDPOINTS="${CLUSTER_BOOTSTRAP_ENDPOINTS:-${CLUSTER_BOOTSTRAP_API_MULTIADDRESSES:-${CLUSTER_BOOTSTRAP_MULTIADDRESSES:-}}}"
 BOOTSTRAP_P2P_PORT="${CLUSTER_BOOTSTRAP_P2P_PORT:-9096}"
+NEW_REPOSITORY=0
 
 log() {
   printf '[%s] %s\n' "${PEER_NAME}" "$1"
@@ -31,6 +32,7 @@ export CLUSTER_SECRET
 if [ ! -f "${CLUSTER_PATH}/service.json" ]; then
   log "initializing persistent Cluster identity and CRDT state"
   ipfs-cluster-service init >/dev/null
+  NEW_REPOSITORY=1
 fi
 
 # `service.json` is persistent and environment variables are only consumed by
@@ -90,7 +92,7 @@ resolve_bootstraps() {
   printf '%s' "${addresses}"
 }
 
-if [ -n "${BOOTSTRAP_ENDPOINTS}" ]; then
+if [ "${NEW_REPOSITORY}" -eq 1 ] && [ -n "${BOOTSTRAP_ENDPOINTS}" ]; then
   log "waiting for an existing Cluster peer over the VPN"
   BOOTSTRAP_ADDRESSES=""
   if [ "${CLUSTER_SEED:-false}" = "true" ]; then
@@ -110,5 +112,9 @@ if [ -n "${BOOTSTRAP_ENDPOINTS}" ]; then
   fi
 fi
 
-log "starting the first peer for cluster ${CLUSTER_CRDT_CLUSTERNAME:-ipfs-cluster}"
+if [ "${NEW_REPOSITORY}" -eq 0 ]; then
+  log "starting the persistent Cluster with its stored peer routes and CRDT state"
+else
+  log "starting the first peer for cluster ${CLUSTER_CRDT_CLUSTERNAME:-ipfs-cluster}"
+fi
 exec ipfs-cluster-service daemon
